@@ -44,7 +44,7 @@ jobs:
         aws-region: us-east-2
 
     - name: update kube config
-      run: aws eks update-kubeconfig --name https://004671524651.signin.aws.amazon.com/console --region us-east-2
+      run: aws eks update-kubeconfig --name education-eks-XQKLsqah --region us-east-2
 
     - name: deploy to AWS EKS
       run: |
