@@ -54,10 +54,10 @@ jobs:
 
     - name: deploy to AWS EKS
       run: |
-        kubectl apply -f eks-demo/01-MySQL-externalName-Service.yml
-        kubectl apply -f eks-demo/02-UserManagementMicroservice-Deployment.yml
-        kubectl apply -f eks-demo/03-UserManagement-NodePort-Service.yml
-        kubectl apply -f eks-demo/04-NotificationMicroservice-Deployment.yml
-        kubectl apply -f eks-demo/05-NotificationMicroservice-SMTP-externalName-Service.yml
-        kubectl apply -f eks-demo/06-NotificationMicroservice-ClusterIP-Service.yml
-        kubectl apply -f eks-demo/07-ALB-Ingress-SSL-Redirect-ExternalDNS.yml
+        kubectl apply -f 01-MySQL-externalName-Service.yml
+        kubectl apply -f 02-UserManagementMicroservice-Deployment.yml
+        kubectl apply -f 03-UserManagement-NodePort-Service.yml
+        kubectl apply -f 04-NotificationMicroservice-Deployment.yml
+        kubectl apply -f 05-NotificationMicroservice-SMTP-externalName-Service.yml
+        kubectl apply -f 06-NotificationMicroservice-ClusterIP-Service.yml
+        kubectl apply -f 07-ALB-Ingress-SSL-Redirect-ExternalDNS.yml
