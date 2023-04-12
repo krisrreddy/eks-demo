@@ -1,57 +1,81 @@
-name: Deploy to AWS EKS - CD
+name: cd
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
-env:
-  # AWS Bucket Keys
-  ACCESS_KEY_BUCKET: ${{ secrets.ACCESS_KEY_BUCKET }}
-  SECRET_KEY_BUCKET: ${{ secrets.SECRET_KEY_BUCKET }}
+env: 
+  AWS_REGION: eu-west-3
+  ECR_REPOSITORY: kubernetes-github-actions
+  SHORT_SHA: $(echo ${{ github.sha }} | cut -c 1-8)
 
 jobs:
-  deploy:
+  run-tests:
     runs-on: ubuntu-latest
+    steps:
+    - name: Clone
+      uses: actions/checkout@v2
+
+    - name: Test
+      run: |
+        cd site
+        npm install
+        npm test
+  build:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    needs:
+      - run-tests
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Clone
+      uses: actions/checkout@v2
 
-    - name: generate image tag
-      id: image-tag
-      run: echo "::set-output name=IMAGE_TAG::$(date '+%d.%m.%Y.%H.%M.%S')"
-
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-          registry: docker.io
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
-
-
-
-
-    - name: install kubectl
-      uses: azure/setup-kubectl@v1
-      with:
-        version: 'v1.21.5'
-      id: install-kubectl
-
-    - name: setup aws credentials
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets.ACCESS_KEY_BUCKET }}
-        aws-secret-access-key: ${{ secrets.SECRET_KEY_BUCKET }}
-        aws-region: us-east-2
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+      
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
 
-    - name: update kube config
-      run: aws eks update-kubeconfig --name education-eks-XQKLsqah --region us-east-2
-
-    - name: deploy to AWS EKS
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       run: |
-        kubectl apply -f 01-MySQL-externalName-Service.yml
-        kubectl apply -f 02-UserManagementMicroservice-Deployment.yml
-        kubectl apply -f 03-UserManagement-NodePort-Service.yml
-        kubectl apply -f 04-NotificationMicroservice-Deployment.yml
-        kubectl apply -f 05-NotificationMicroservice-SMTP-externalName-Service.yml
-        kubectl apply -f 06-NotificationMicroservice-ClusterIP-Service.yml
-        kubectl apply -f 07-ALB-Ingress-SSL-Redirect-ExternalDNS.yml
+        cd site
+        docker image build \
+        --tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
+        --tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SHORT_SHA }} \
+        .
+        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SHORT_SHA }}
+    - name: Install and configure kubectl
+      run: |
+        VERSION=$(curl --silent https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+        # https://github.com/aws/aws-cli/issues/6920#issuecomment-1117981158
+        VERSION=v1.23.6
+        curl https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/amd64/kubectl \
+          --progress-bar \
+          --location \
+          --remote-name
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        echo ${{ secrets.KUBECONFIG }} | base64 --decode > kubeconfig.yaml
+    - name: Deploy
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        export ECR_REPOSITORY=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+        export IMAGE_TAG=${{ env.SHORT_SHA }}
+        export KUBECONFIG=kubeconfig.yaml
+        envsubst < k8s/kustomization.tmpl.yaml > k8s/kustomization.yaml
+        kubectl kustomize k8s | kubectl apply -f -
