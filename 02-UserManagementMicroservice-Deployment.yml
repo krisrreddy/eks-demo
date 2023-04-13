@@ -29,14 +29,11 @@ spec:
             - name: DB_PORT
               value: "3306"
             - name: DB_NAME
-              value: "usermgmt"
+              value: "terraform-20230413043137504100000001"
             - name: DB_USERNAME
-              value: "dbadmin"
+              value: "foo"
             - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-db-password
-                  key: db-password
+              value: "foobarbaz"
             - name: NOTIFICATION_SERVICE_HOST
               value: "notification-clusterip-service"
             - name: NOTIFICATION_SERVICE_PORT
